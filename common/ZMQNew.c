@@ -60,6 +60,7 @@ int z_recv(zmqio_t *ctx, void *p, size_t *sz){
 		}
 		rc = zmq_msg_recv(&part, ctx->socket, 0);
 		if (rc < 0) {
+			printf("%d\n", 0);
 			break;
 		}
 		msz = zmq_msg_size(&part);
@@ -73,10 +74,13 @@ int z_recv(zmqio_t *ctx, void *p, size_t *sz){
 		zmq_msg_close(&part);
 	} while (more && *sz < maxsz);
 	if (rc < 0) {
+		printf("%d\n", 1);
 		return -1;
 	} else if (more || trunc) {
+		printf("%d\n", 2);
 		return 1;
 	} else {
+		printf("%d\n", 3);
 		return 0;
 	}
 }

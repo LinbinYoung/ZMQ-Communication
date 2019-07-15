@@ -1,3 +1,6 @@
+/*
+    I am Server
+*/
 #ifndef _MSGIO_H
 #include "MSGIO.h"
 #endif
@@ -8,42 +11,88 @@ extern "C" {
 }
 #endif
 
-typedef struct STUDNET{
-    int age;
-    int score;
-    char port[5];
-    char name[5];
-    char SID[5];
-}STD;
+#include "config.h"
+#include <stdlib.h>
+#include <limits.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <getopt.h>
+#include <unistd.h>
+#include <sgx_key_exchange.h>
+#include <sgx_report.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include "hexutil.h"
+#include "crypto.h"
+#include "byteorder.h"
+#include "msgio.h"
+#include "protocol.h"
+#include "base64.h"
+#include "iasrequest.h"
+#include "sendfile.h"
+#include "readdata.h"
+#include "readconfig.h"
+#include <map>
+#include <string>
+#include <algorithm>
+#include <unordered_map>
+#include <iostream>
+#include <typeinfo>
 
-typedef struct TEACHER{
-    char name[5];
-    char SID[8];
-}TEA;
+static sgx_ec256_public_t client_pub_key;
+static sgx_ec256_signature_t client_sig;
+
+template <class _Tp>  
+struct my_equal_to : public binary_function<_Tp, _Tp, bool>{
+    bool operator()(const _Tp& __x, const _Tp& __y) const  
+    { return strcmp( __x, __y ) == 0; }  
+};
+
+struct Hash_Func{
+    //BKDR hash algorithm
+    int operator()(char * str)const
+    {
+        int seed = 131;
+        int hash = 0;
+        while(*str)
+        {
+            hash = (hash * seed) + (*str);
+            str ++;
+        }
+        return hash & (0x7FFFFFFF);
+    }
+};
+
+typedef unordered_map<char*, MSGIO*, Hash_Func,  my_equal_to<char*> > my_unordered_map;
 
 int main(int argc, char** argv){
-    printf("%s\n", "Connecting to the server........");
-    const char *addr = "tcp://127.0.0.1:8888";
+    const char *addr[] = {"tcp://127.0.0.1:8888", "tcp://127.0.0.1:7777"};
+    char *port[] = {"8888", "7777"};
     zmqio *z;
-    z = z_new_client(addr);
-    // Send MSG to Server at 127.0.0.1:8888
-    STD std_info = {21, 90, "8888", "SHU", "2015"};
+    long num = 2;
+    z = z_new_server(addr, num);
+    my_unordered_map table;
+    for (int i = 0; i < num; i ++){
+        table.insert(my_unordered_map::value_type(port[i], new MSGIO(z, port[i])));
+    }
+    cout << "Waiting for client to connect......\n";
     static char incomming[1024*1024];
-    size_t incomming_sz = sizeof(incomming);
-    TEA recv_tea;
-    z_send_many(z, 2, CLIENT_KEY_PREFIX, PREFIX_LEN, &std_info, sizeof(STD));
-    int rc = z_recv(z, incomming, &incomming_sz);
-    if (rc){
-        eprintf("Error reading from zmq: %d\n", rc);
-        return 0;
+    for (;;){
+        size_t incoming_sz = sizeof(incomming);
+        int rc = z_recv(z, incomming, &incoming_sz);
+        if (rc){
+            eprintf("Error reading from zmq: %d\n", rc);
+            break;
+        }
+        char local_port[5];
+        memcpy(local_port, &incomming[PREFIX_LEN], sizeof(local_port));
+        printf("%s\n", local_port);
+        MSGIO* msgio = table[local_port];
+        msgio->do_attestation_tranfer(incomming);
     }
-    if (!memcmp(incomming, CLIENT_KEY_PREFIX, PREFIX_LEN)){
-        long step = PREFIX_LEN;
-        memcpy(&recv_tea.name, &incomming[step], sizeof(recv_tea.name));
-        step = step + sizeof(recv_tea.name);
-        memcpy(&recv_tea.SID, &incomming[step], sizeof(recv_tea.SID));
-        printf("Name: %s\n", recv_tea.name);
-        printf("SID: %s\n", recv_tea.SID);
-    }
+    zmq_close(z);
     return 0;
 }

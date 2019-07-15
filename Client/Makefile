@@ -6,7 +6,7 @@ LIBS = -m64 -lzmq
 # .h path
 CFLAGS = -Wall -I. -I../common
 CPPFLAGS = $(CFLAGS) -std=c++11
-GOAL = myclient1
+GOAL = server
 # Directory
 LOCALDIR = ./
 COMMONDIR = ../common

@@ -30,7 +30,7 @@ private:
 public:
 	MSGIO(zmqio_t *z, const char* port);
 	~MSGIO();
-	void do_attestation();
+	void do_attestation_tranfer(char *MSG);
 };
 
 #endif
